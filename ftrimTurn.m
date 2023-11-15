@@ -1,0 +1,84 @@
+% ftrimTurn.m
+% function to be minimized to calculate steady turn flight
+% conditions for a fixed wing aircraft
+% usage
+%   y = ftrimTurn(Xi,V,h,Vvert,turnRate,ihTrimRect,deltaCGb,aircraft)
+% where
+%   Xi = [phi;theta;alpha;deltat;pitchControl,deltaa,deltar] : vector with variables to be
+%        calculated in steady turn flight condition
+%     with
+%     phi : roll (rad)
+%     theta : pitch (rad)
+%     alpha : angle of attack (rad)
+%     deltat : propulsion system control (0<=deltat<=1)
+%     pitchControl : pitch control, it is ih if aircraft.Cmih~=0, or deltae
+%                    otherwise (rad)
+%     deltaa : aileron (rad)
+%     deltar : rudder (rad)
+%   V : airspeed (m/s)
+%   h : altitude (m)
+%   Vvert : vertical velocity (m/s)
+%   turnRate : turn rate (rad/s)
+%   ihTrimRect : value of ih for steady Turn flight conditions (rad)
+%                (only for aircraft with ih and deltae)
+%   deltaCGb : position of aircraft CG respect a nominal CG position
+%              expressed in body frame (m)
+%   aircraft : aicraft data structure
+%   y : value of ftrimTurn
+%  
+
+function y = ftrimTurn(Xi,V,h,Vvert,turnRate,ihTrimRect,deltaCGb,aircraft)
+  global Vbdot
+  
+  % extract components of Xi
+  phi = Xi(1,1);
+  theta = Xi(2,1);
+  alpha = Xi(3,1);
+  deltat = Xi(4,1);
+  pitchControl = Xi(5,1);
+  deltaa = Xi(6,1);
+  deltar = Xi(7,1);
+  
+  % define components of state vector x
+  pe = [0;0;-h];
+  psi = 0;
+  Phi = [phi;theta;psi];
+  beta = 0;
+  Vb = [V*cos(alpha)*cos(beta);V*sin(beta);V*sin(alpha)*cos(beta)];
+  Phidot = [0;0;turnRate];
+  omegab = Hinv(Phi)*Phidot;
+  % assemble state vector x
+  x = [pe;Phi;Vb;omegab];
+  
+  % define components of derivative of state vector xdot
+  Cbe = DCM(Phi);
+  pedot = Cbe'*Vb;
+  Vbdot = [0;0;0];
+  omegabdot = [0;0;0];
+  
+  % assemble derivative of state vector xdot
+  xdot = [pedot;Phidot;Vbdot;omegabdot];
+  
+  % define components of controls vector delta
+  deltaf = 0;
+  if aircraft.Cmdeltae~=0
+      ih = ihTrimRect;
+      deltae = pitchControl;
+  else
+      ih = pitchControl;
+      deltae = 0;
+  end
+
+  % assemble controls vector delta
+  delta = [deltat;deltaf;ih;deltae;deltaa;deltar];
+  
+  % other variables
+  t = 0;
+  Vwe = [0;0;0];
+  
+  % calculate result of ftrimRect
+  y = norm(xdot-faircraft(t,x,delta,Vwe,deltaCGb,aircraft))^2+(pedot(3)+Vvert)^2;
+end
+
+
+ 
